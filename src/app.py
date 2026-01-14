@@ -10,13 +10,34 @@ import os
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
-
+from flask import Flask, request, make_response
 
 
 # Créer l'application Flask
 app = Flask(__name__)
 
- 
+@app.after_request
+def set_security_headers(response):
+    # Content Security Policy
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'"
+
+    # Permissions Policy
+    response.headers['Permissions-Policy'] = "camera=(), microphone=(), geolocation=()"
+
+    # Anti MIME-sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Server header suppression
+    response.headers['Server'] = 'SecureServer'
+
+    # Cache control pour éviter la mise en cache non sécurisée
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    return response
+
+
 # Configuration des logs
 logging.basicConfig(
     level=logging.INFO,
@@ -219,6 +240,10 @@ def index():
 def get_traces():
     return jsonify(list(trace_ids.values())), 200
 
+@app.route("/todos")
+def get_todos():
+    todos = [{"id": 1, "task": "Buy milk"}]
+    return {"todos": todos}
 
  
 
