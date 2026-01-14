@@ -6,9 +6,17 @@ import json
 from datetime import datetime, UTC
 import uuid
 import os
+
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from prometheus_client import make_wsgi_app
+
+
+
 # Créer l'application Flask
 app = Flask(__name__)
 
+ 
 # Configuration des logs
 logging.basicConfig(
     level=logging.INFO,
@@ -16,9 +24,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+
+HTTP_REQUESTS_TOTAL = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "path", "status"]
+)
+
+HTTP_REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency",
+    ["path", "method", "status"]
+)
 # Base de données en mémoire (simple pour commencer)
 todos = []
+trace_ids = {}
 request_count = 0
+
 
 # Fonction pour créer des logs structurés
 def log_structured(level, message, **kwargs):
@@ -41,19 +64,53 @@ def before_request():
                    trace_id=request.trace_id,
                    method=request.method,
                    path=request.path)
+    trace_ids[request.trace_id] = {
+        "trace_id": request.trace_id,
+        "method": request.method,
+        "path": request.path,
+        "start_time": datetime.now(UTC).isoformat()
+    }
+
+
 
 # Middleware : s'exécute après chaque requête
 @app.after_request
 def after_request(response):
     duration = time.time() - request.start_time
-    log_structured("INFO", "Request completed",
-                   trace_id=request.trace_id,
-                   method=request.method,
-                   path=request.path,
-                   status=response.status_code,
-                   duration=round(duration, 3))
-    response.headers['X-Trace-ID'] = request.trace_id
+
+    HTTP_REQUESTS_TOTAL.labels(
+        method=request.method,
+        path=request.path,
+        status=response.status_code
+    ).inc()
+
+    HTTP_REQUEST_DURATION.labels(
+        path=request.path,
+        method=request.method,
+        status=response.status_code
+    ).observe(duration)
+
+    # Compléter la trace
+    trace_ids[request.trace_id]["status"] = response.status_code
+    trace_ids[request.trace_id]["duration"] = round(duration, 3)
+
+    # Limiter à 100 traces (éviter fuite mémoire)
+    if len(trace_ids) > 100:
+        trace_ids.pop(next(iter(trace_ids)))
+
+    log_structured(
+        "INFO",
+        "Request completed",
+        trace_id=request.trace_id,
+        method=request.method,
+        path=request.path,
+        status=response.status_code,
+        duration=round(duration, 3)
+    )
+
+    response.headers["X-Trace-ID"] = request.trace_id
     return response
+
 
 # ENDPOINT 1 : Vérifier si l'API fonctionne
 @app.route('/health', methods=['GET'])
@@ -87,8 +144,12 @@ def create_todo():
         # Validation
         if not data or 'title' not in data:
             log_structured("ERROR", "Invalid request",
-                          trace_id=request.trace_id,
-                          error="Missing title")
+                        trace_id=request.trace_id,
+                        method=request.method,
+                        path=request.path,
+                        status=400,
+                        error="Missing title")
+
             return jsonify({"error": "Title is required"}), 400
         
         # Créer la nouvelle tâche
@@ -141,16 +202,6 @@ def delete_todo(todo_id):
     
     return jsonify({"message": "Todo deleted successfully"}), 200
 
-# ENDPOINT 6 : Métriques simples
-@app.route('/metrics', methods=['GET'])
-def metrics():
-    """Endpoint pour exposer des métriques basiques"""
-    return jsonify({
-        "total_requests": request_count,
-        "total_todos": len(todos),
-        "completed_todos": sum(1 for t in todos if t.get('completed')),
-        "pending_todos": sum(1 for t in todos if not t.get('completed'))
-    }), 200
 
 @app.route('/', methods=['GET'])
 def index():
@@ -164,6 +215,14 @@ def index():
         }
     }), 200
 
+@app.route('/traces', methods=['GET'])
+def get_traces():
+    return jsonify(list(trace_ids.values())), 200
+
+
+ 
+
+app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {"/metrics": make_wsgi_app()})
 
 # Point d'entrée de l'application
 if __name__ == '__main__':
