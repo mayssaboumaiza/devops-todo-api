@@ -33,6 +33,8 @@ def log_structured(level, message, **kwargs):
 # Middleware : s'exécute avant chaque requête
 @app.before_request
 def before_request():
+    global request_count
+    request_count += 1  # incrémente toutes les requêtes
     request.trace_id = str(uuid.uuid4())
     request.start_time = time.time()
     log_structured("INFO", "Request started",
