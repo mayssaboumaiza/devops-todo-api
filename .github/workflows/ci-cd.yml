@@ -24,6 +24,7 @@ jobs:
       
       - name: Run tests
         run: pytest tests/ || echo "No tests yet"
+      
   security-sast:
     runs-on: ubuntu-latest
     steps:
@@ -64,20 +65,41 @@ jobs:
          docker push ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
 
   security-dast:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+            needs: build
+            runs-on: ubuntu-latest
+            steps:
+                - uses: actions/checkout@v4
 
-      - name: Run OWASP ZAP Baseline Scan
-        run: |
-          docker run -t --rm -v ${{ github.workspace }}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://host.docker.internal:5000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap-report.json
+                # Build et lancer le conteneur de l'application
+                - name: Build Docker image
+                  run: docker build -t todo-api .
 
-      - name: Upload ZAP report
-        uses: actions/upload-artifact@v4
-        with:
-          name: dast-report
-          path: |
-            zap-report.html
-            zap-report.json
+                - name: Start application
+                  run: docker run -d -p 5000:5000 --name todo-api todo-api
+
+                # Attendre que l'application soit disponible
+                - name: Wait for app
+                  run: |
+                    for i in {1..10}; do
+                    if curl -s http://localhost:5000; then
+                        echo "App is up"
+                        break
+                    fi
+                    echo "Waiting for app..."
+                    sleep 3
+                    done
+
+                # Lancer ZAP
+                - name: Run OWASP ZAP Baseline Scan
+                  run: |
+                    docker run -t --rm -v ${{ github.workspace }}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
+                    zap-baseline.py -t http://host.docker.internal:5000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap-report.json
+
+                # Upload des reports
+                - name: Upload ZAP report
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: dast-report
+                    path: |
+                     zap-report.html
+                     zap-report.json
