@@ -10,33 +10,9 @@ import os
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
-from flask import Flask, request, make_response
-
 
 # Créer l'application Flask
 app = Flask(__name__)
-
-@app.after_request
-def set_security_headers(response):
-    # Content Security Policy
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'"
-
-    # Permissions Policy
-    response.headers['Permissions-Policy'] = "camera=(), microphone=(), geolocation=()"
-
-    # Anti MIME-sniffing
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-
-    # Server header suppression
-    response.headers['Server'] = 'SecureServer'
-
-    # Cache control pour éviter la mise en cache non sécurisée
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-
-    return response
-
 
 # Configuration des logs
 logging.basicConfig(
@@ -44,8 +20,6 @@ logging.basicConfig(
     format='%(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
 
 HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total",
@@ -62,7 +36,6 @@ HTTP_REQUEST_DURATION = Histogram(
 todos = []
 trace_ids = {}
 request_count = 0
-
 
 # Fonction pour créer des logs structurés
 def log_structured(level, message, **kwargs):
@@ -92,11 +65,28 @@ def before_request():
         "start_time": datetime.now(UTC).isoformat()
     }
 
-
-
 # Middleware : s'exécute après chaque requête
 @app.after_request
 def after_request(response):
+    # =====================
+    # Security headers
+    # =====================
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self'"
+    )
+    response.headers['Permissions-Policy'] = "camera=(), microphone=(), geolocation=()"
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Server'] = 'SecureServer'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+
+    # =====================
+    # Metrics & tracing
+    # =====================
     duration = time.time() - request.start_time
 
     HTTP_REQUESTS_TOTAL.labels(
@@ -111,11 +101,9 @@ def after_request(response):
         status=response.status_code
     ).observe(duration)
 
-    # Compléter la trace
     trace_ids[request.trace_id]["status"] = response.status_code
     trace_ids[request.trace_id]["duration"] = round(duration, 3)
 
-    # Limiter à 100 traces (éviter fuite mémoire)
     if len(trace_ids) > 100:
         trace_ids.pop(next(iter(trace_ids)))
 
@@ -132,7 +120,6 @@ def after_request(response):
     response.headers["X-Trace-ID"] = request.trace_id
     return response
 
-
 # ENDPOINT 1 : Vérifier si l'API fonctionne
 @app.route('/health', methods=['GET'])
 def health():
@@ -146,14 +133,11 @@ def health():
 @app.route('/todos', methods=['GET'])
 def get_todos():
     global request_count
-    request_count += 1
-
     return jsonify({
         "todos": todos,
         "count": len(todos),
         "total_requests": request_count
     }), 200
-
 
 # ENDPOINT 3 : Créer une nouvelle tâche
 @app.route('/todos', methods=['POST'])
@@ -205,7 +189,6 @@ def get_todo(todo_id):
 
     return jsonify(todo), 200
 
-
 # ENDPOINT 5 : Supprimer une tâche
 @app.route('/todos/<string:todo_id>', methods=['DELETE'])
 def delete_todo(todo_id):
@@ -239,13 +222,6 @@ def index():
 @app.route('/traces', methods=['GET'])
 def get_traces():
     return jsonify(list(trace_ids.values())), 200
-
-@app.route("/todos")
-def get_todos():
-    todos = [{"id": 1, "task": "Buy milk"}]
-    return {"todos": todos}
-
- 
 
 app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {"/metrics": make_wsgi_app()})
 
