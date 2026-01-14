@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main,feature/ci-cd ]
   pull_request:
     branches: [ main ]
 
@@ -41,6 +41,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       
       - name: Push to Docker Hub
+        if: github.ref == 'refs/heads/main'
         run: |
-          docker tag todo-api ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
+         docker tag todo-api ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
+         docker push ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
+
