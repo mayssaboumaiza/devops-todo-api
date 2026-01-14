@@ -93,7 +93,7 @@ jobs:
                 - name: Run OWASP ZAP Baseline Scan
                   run: |
                     docker run -t --rm -v ${{ github.workspace }}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
-                    zap-baseline.py -t http://host.docker.internal:5000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap-report.json
+                    zap-baseline.py -t http://localhost:5000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap-report.json
 
                 # Upload des reports
                 - name: Upload ZAP report
