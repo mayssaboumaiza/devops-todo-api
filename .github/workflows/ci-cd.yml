@@ -24,6 +24,23 @@ jobs:
       
       - name: Run tests
         run: pytest tests/ || echo "No tests yet"
+  security-sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Bandit (SAST for Python)
+        run: |
+          pip install bandit
+          bandit -r src/ -f json -o bandit-report.json || true
+      
+      - name: Upload SAST results
+        uses: actions/upload-artifact@v3
+        with:
+          name: sast-results
+          path: bandit-report.json
+
+
   
   build:
     needs: test
@@ -46,3 +63,21 @@ jobs:
          docker tag todo-api ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
          docker push ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
 
+  security-dast:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run OWASP ZAP Baseline Scan
+        run: |
+          docker run -t --rm -v ${{ github.workspace }}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://host.docker.internal:5000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap-report.json
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dast-report
+          path: |
+            zap-report.html
+            zap-report.json
