@@ -65,7 +65,7 @@ curl.exe http://localhost:5000/todos
 
 - [x] API REST basique
 - [x] Dockerisation
-- [ ] CI/CD Pipeline
-- [ ] Observabilité
-- [ ] Sécurité (SAST/DAST)
-- [ ] Déploiement Kubernetes
+- [x] CI/CD Pipeline
+- [x] Observabilité
+- [x] Sécurité (SAST/DAST)
+- [x] Déploiement Kubernetes
