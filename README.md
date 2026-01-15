@@ -241,21 +241,21 @@ bash# Démarrer Minikube
 minikube start
 
 # Appliquer les manifests
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/
+kubectl get deployments
+kubectl get services
+kubectl get deploy
 
 # Vérifier le déploiement
 kubectl get pods
 kubectl get services
+kubectl get nodes
 
 # Accéder à l'application
 minikube service todo-api-service --url
 
-10.3 Résultats
-État du déploiement :
-NAME                        READY   STATUS    RESTARTS   AGE
-todo-api-6c8d9f5b4c-abc12   1/1     Running   0          2m
-todo-api-6c8d9f5b4c-def34   1/1     Running   0          2m
+# Voir les logs
+kubectl logs -f <pod-name>
 
 11. Résultats et Démonstration
 11.1 Fonctionnalités Démontrées
@@ -344,13 +344,10 @@ Ce projet a permis de mettre en pratique l'ensemble de la chaîne DevOps de mani
 ✅ Documentation complète et claire
 14.2 Améliorations Futures
 Court terme :
-
 Ajouter plus de tests unitaires et d'intégration
 Implémenter une vraie base de données (PostgreSQL)
 Ajouter des tests de charge (JMeter, k6)
-
 Moyen terme :
-
 Déploiement sur un cloud public (AWS, GCP, Azure)
 Mise en place d'un monitoring avec Grafana + Prometheus
 Configuration d'alertes automatiques
@@ -358,26 +355,11 @@ Configuration d'alertes automatiques
 B. Commandes Utiles
 bash# Lancer l'API localement
 python src/app.py
-
 # Build Docker
 docker build -t todo-api .
-
-
 # Tests
 pytest tests/
 
-# Déployer sur Kubernetes
-kubectl apply -f k8s/
-kubectl get deployments
-kubectl get services
-kubectl get deploy
-# Vérifier les pods
-kubectl get pods
-kubectl get nodes
-# Voir les logs
-kubectl logs -f <pod-name>
-
-minikube service todo-api-service --url
 $ curl http://127.0.0.1:50547/health
 
 $ curl http://127.0.0.1:50547/todos
@@ -392,8 +374,6 @@ $ curl -X DELETE http://127.0.0.1:50547/todos/9363d8ee-ea0a-4e0d-932c-3e03b04df9
 
 $curl http://127.0.0.1:50547/traces
 $curl http://127.0.0.1:50547/metrics
-
-
 
 C. Glossaire
 CI/CD : Continuous Integration / Continuous Deployment
